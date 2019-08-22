@@ -21,12 +21,12 @@ typedef struct {
 
 void initiate_schedule() {
 	printf( "=------Schedule------=\n"
-		"=                    =\n"
 		"=    1 New Event     =\n"
 		"=  2 Delete Event    =\n"
 		"=  3 Save Schedule   =\n"
 		"=  4 Load Schedule   =\n"
-		"=      5 Exit        =\n"
+		"= 5 Print Schedule   =\n"
+		"=      6 Exit        =\n"
 		"=--------------------=\n");
 
 }
@@ -200,8 +200,29 @@ int main() {
 				
 				print_schedule(schedule, schedule_index);
 				break;
-			case 2:
+			case 2:;
 				// TODO : Create option to delete events from schedule.
+				
+				// Get event details
+
+				int event_index, event_day;
+				printf("Event Index / Event Day:");
+				scanf("%d %d", &event_index, &event_day);				
+
+				// Check if event exists
+				int amount_of_events = schedule_index[event_day];
+				if (amount_of_events - 1 < event_index) {
+					printf("You cannot delete an event which doesn't exist.");
+					break;
+				}
+				
+				// Remove event
+				int i;
+				for (i=event_index; i<amount_of_events-1;i++) {
+					schedule[event_day][i] = schedule[event_day][i+1];
+				}	
+				schedule[event_day][i] = 0;
+				schedule_index[event_day]--;
 				break;
 			case 3:
 				// TODO : Add option to save the schedule in a file.
@@ -209,7 +230,11 @@ int main() {
 			case 4:
 				// TODO : Add option to load a schedule from a file.
 				break;
-			case 5: 
+			case 5:
+				// Prints schedule in a pretty table.
+				print_schedule(schedule, schedule_index);
+				break;
+			case 6: 
 				running = 0;
 				break;
 			default:
