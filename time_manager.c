@@ -7,6 +7,7 @@ This program creates files with a schedule.
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h> // For access function
 
 #define EVENTS_PER_DAY 10
 #define DAYS_PER_WEEK  7
@@ -18,6 +19,11 @@ typedef struct {
 	int hour;
 	int minute;
 } Event;
+
+void remove_newlines() {
+	int c;
+	while ( (c = getchar()) != EOF && c != '\n') { }
+}
 
 void initiate_schedule() {
 	printf( "=------Schedule------=\n"
@@ -41,10 +47,13 @@ Event* get_new_event() {
 	scanf("%1d %2d %2d", &day, &hour, &minute);
 	if (day < 0 || hour < 0  || minute < 0 ) return NULL;
 	if (day > 6 || hour > 24 || minute > 60) return NULL;
+	remove_newlines();
 	
 	// Name of new event
 	printf("Name of the event(max %d): ", EVENT_NAME_SIZE);
-	scanf("%20s", name);
+	fflush(stdout);
+	fgets(name, EVENT_NAME_SIZE, stdin);
+	strtok(name, "\n");
 	if (strlen(name) == 0) return NULL;
 	
 	Event* event = (Event *) malloc(sizeof(*event));	
@@ -106,6 +115,39 @@ int max(int schedule_index[DAYS_PER_WEEK]) {
 		if (current_value > max_day) max_day = current_value;
 	}
 	return max_day;
+}
+
+void save_schedule(char filename[11], Event* schedule[DAYS_PER_WEEK][EVENTS_PER_DAY], int schedule_index[DAYS_PER_WEEK]) {
+
+	// COnvert schedule to file
+	// >> Schedule: shopping 10:40 sunday, skiing 9:30 monday
+	// File: 0 10 40 shopping\n1 9 30 skiing\n
+	
+	
+	int extra_chars = 4; // 3 spaces + \n
+	int number_size = 1 + 2 + 2; // 1=day, 2=hour, 2=minute
+	int max_event_size = EVENT_NAME_SIZE + extra_chars + number_size;
+	int max_file_size = DAYS_PER_WEEK * EVENTS_PER_DAY * max_event_size + 1;
+	char file_content[max_file_size];
+
+	for (int i=0; i < DAYS_PER_WEEK; i++) 
+		for (int j=0; j < schedule_index[i]; j++) {
+			char temp_string[max_event_size + 1];
+			sprintf(temp_string, "%d %d %d %s\n", i, schedule[i][j]->hour, schedule[i][j]->minute, schedule[i][j]->name);
+			strcat(file_content, temp_string);
+		}
+
+
+	
+	// Create file
+	FILE *file_pointer;
+	file_pointer = fopen(filename, "w");
+
+	// Save contents into file
+	fputs(file_content, file_pointer);
+
+	// Close file
+	fclose(file_pointer);	
 }
 
 void print_schedule(Event* schedule[DAYS_PER_WEEK][EVENTS_PER_DAY], int schedule_index[DAYS_PER_WEEK]) {
@@ -225,7 +267,21 @@ int main() {
 				schedule_index[event_day]--;
 				break;
 			case 3:
-				// TODO : Add option to save the schedule in a file.
+				printf("Filename(max size 10): ");
+				char filename[11];
+				scanf("%10s", filename);
+				remove_newlines();
+				if (access(filename, F_OK) != -1) {
+					printf("This file exists, do you want to override it?(Y/N)");
+					char OK;
+					scanf("%c", &OK);
+					if (OK == 'Y') {
+						save_schedule(filename, schedule, schedule_index);
+					}
+					break;
+				}	
+				save_schedule(filename, schedule, schedule_index);
+				
 				break;
 			case 4:
 				// TODO : Add option to load a schedule from a file.
