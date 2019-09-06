@@ -53,10 +53,11 @@ Event* get_new_event() {
 	printf("Name of the event(max %d): ", EVENT_NAME_SIZE);
 	fflush(stdout);
 	fgets(name, EVENT_NAME_SIZE, stdin);
-	strtok(name, "\n");
+	name[strcspn(name, "\n")] = 0;
 	if (strlen(name) == 0) return NULL;
 	
-	Event* event = (Event *) malloc(sizeof(*event));	
+	Event* event = (Event *) malloc(sizeof(Event));	
+	// TODO: Add malloc errror handling
 	strcpy(event->name, name);
 	event->day = day;
 	event->hour = hour;
@@ -150,6 +151,14 @@ void save_schedule(char filename[11], Event* schedule[DAYS_PER_WEEK][EVENTS_PER_
 	fclose(file_pointer);	
 }
 
+void clean_schedule(Event* schedule[DAYS_PER_WEEK][EVENTS_PER_DAY], int schedule_index[DAYS_PER_WEEK]) {
+	for (int i=0; i < DAYS_PER_WEEK; i++) 
+		for (int j=0; j < schedule_index[i]; j++) {
+			free(schedule[i][j]);
+		}
+	for (int i=0; i < DAYS_PER_WEEK; i++) schedule_index[i] = 0;
+}
+
 void print_schedule(Event* schedule[DAYS_PER_WEEK][EVENTS_PER_DAY], int schedule_index[DAYS_PER_WEEK]) {
 	// Prints out the schedule by order of time, from lowest to heighest. 
 	
@@ -157,7 +166,6 @@ void print_schedule(Event* schedule[DAYS_PER_WEEK][EVENTS_PER_DAY], int schedule
 	printf("\n|       Sunday       |       Monday       |       Teusday      |      Wedensday     |      Thursday      |       Friday       |      Saturday      |\n%s\n",line_break);
 	//printf("%s\n", line_break);
 	//printf("break before function\n");	
-	//printf("Max value: %d\n", max(schedule_index));
 	
 	for (int i=0; i < max(schedule_index);i++) {
 		char events[8+EVENT_NAME_SIZE*7 + 1] = {0};
@@ -175,17 +183,17 @@ void print_schedule(Event* schedule[DAYS_PER_WEEK][EVENTS_PER_DAY], int schedule
 				char* event_name = schedule[day][i]->name;
 				int event_name_size = strlen(event_name);
 				strncpy(&temp_events[(EVENT_NAME_SIZE + 1-event_name_size)/2], event_name, event_name_size);  // names[day]=schedule[day][i];
-			
 				
-				char* temp_str;
+				char* temp_str = (char*) malloc(5);
+				// TODO: Add malloc error handling
 				sprintf(temp_str, "%02d:%02d", schedule[day][i]->hour, schedule[day][i]->minute);
-
+				
 				int hour_size = strlen(temp_str);
 				strncpy(temp_hours + (EVENT_NAME_SIZE - 4)/2,temp_str, hour_size);
+				free(temp_str);
 			}
 			strcat(events, temp_events);
 			strcat(events, "|");
-
 			strcat(hours, temp_hours);
 			strcat(hours, "|");
 		}
@@ -200,25 +208,91 @@ void print_schedule(Event* schedule[DAYS_PER_WEEK][EVENTS_PER_DAY], int schedule
 	}
 }	
 
+void load_schedule(char filename[EVENT_NAME_SIZE + 1], Event* schedule[DAYS_PER_WEEK][EVENTS_PER_DAY], int schedule_index[DAYS_PER_WEEK]) {
+	
+	// Open file with read mode
+	FILE *file_ptr;
+	file_ptr = fopen(filename, "r");
+	
+	// Get the day minute hour and name from the line.
+	int extra_chars = 4; // 3 spaces + \n
+	int number_size = 1 + 2 + 2; // 1=day, 2=hour, 2=minute
+	int max_event_size = EVENT_NAME_SIZE + extra_chars + number_size;
+	
+	char *line_ptr = (char *)(malloc(max_event_size + 1));
+	// TODO: Add malloc error handling here
+	size_t line_size;
+	const char delim[2] = " ";
+	char *token; 
+	while (getline(&line_ptr, &line_size, file_ptr) != -1) {
+		int word_number = 0;
+		int day, minute, hour; 
+		char name[EVENT_NAME_SIZE + 1] = {0};
+		token = strtok(line_ptr, delim);
+		while (token != NULL) {
+			switch(word_number) {
+				case 0:
+					day = atoi(token);
+					if (day > 6 || day < 0) return;
+					break;
+				case 1:
+					hour = atoi(token);
+					if (hour > 23 || hour < 0) return;
+					break;
+				case 2:
+					minute = atoi(token);
+					if (minute > 59 || minute < 0) return;
+					break;
+				default:
+					if (word_number >= 3) {
+						//printf("%s %s %ld %ld",name, token, strlen(name), strlen(token));
+						if (strlen(name) + strlen(token) + 1 > EVENT_NAME_SIZE) break;
+						if (strlen(name) > 0) strcat(name, " ");
+						strcat(name, token);
+					}
+					break;
+			}
+			word_number += 1;
+			token = strtok(NULL, delim);
+		}
+		name[strcspn(name, "\n")] = 0;
+		//printf("Event: |%s| %d %d %d\n",name, day, hour, minute); 
+		Event* event = (Event *) malloc(sizeof(Event));
+		// TODO : Add malloc error handling
+		strcpy(event->name, name);
+		event->day = day;
+		event->hour = hour;
+		event->minute = minute;
+		enter_sorted(schedule, schedule_index, event);
+		schedule_index[day]++;
+	}
+	print_schedule(schedule, schedule_index);
+	free(line_ptr);
+}	
+
+
 
 int main() {
 	int running = 1;
-	// schedule of sunday-saturday, not ordered.
+	// schedule of sunday-saturday, ordered by day -> hour -> minute.
 	Event* schedule[DAYS_PER_WEEK][EVENTS_PER_DAY];
 	int schedule_index[DAYS_PER_WEEK] = {0};
 
 	while (running) {
+		// Schedule prompt message
 		initiate_schedule();
+
 		int choice;
 		Event* event;
 		scanf("%1d", &choice);
+		
 		switch (choice) {
 			case 1:
 				// This case creates a new event and appends it to the schedule.
 				
 				event = get_new_event();
 				if (event == NULL) {
-					printf("Something went wrong with creating your event.");
+					printf("Something went wrong with creating your event.\n");
 					break;
 				}
 
@@ -230,31 +304,30 @@ int main() {
 				// Index of last event in schedule array
 				int event_num = schedule_index[event->day];
 				if (event_num == EVENTS_PER_DAY - 1) {
-					printf("You have exceeded the amount of events per day");
+					printf("You have exceeded the amount of events per day\n");
 					free(event);
 					break;
 				}
 				
+				// Validate event entering to schedule
 				if (enter_sorted(schedule, schedule_index, event)) {
-					printf("[+] Successfully added new event to schedule!");
+					printf("[+] Successfully added new event to schedule!\n");
 					schedule_index[event->day]++;
-				} else { printf("Couldn't add new event to schedule!"); }
+				} else { printf("Couldn't add new event to schedule!\n"); }
 				
-				print_schedule(schedule, schedule_index);
+				//print_schedule(schedule, schedule_index);
 				break;
-			case 2:;
-				// TODO : Create option to delete events from schedule.
-				
-				// Get event details
+			case 2:
+				// This case deletes an event (uses index rather than event number)
 
-				int event_index, event_day;
 				printf("Event Index / Event Day:");
+				int event_index, event_day;
 				scanf("%d %d", &event_index, &event_day);				
 
 				// Check if event exists
 				int amount_of_events = schedule_index[event_day];
 				if (amount_of_events - 1 < event_index) {
-					printf("You cannot delete an event which doesn't exist.");
+					printf("You cannot delete an event which doesn't exist.\n");
 					break;
 				}
 				
@@ -265,39 +338,66 @@ int main() {
 				}	
 				schedule[event_day][i] = 0;
 				schedule_index[event_day]--;
+
 				break;
+
 			case 3:
+				// This case saves a schedule into a file
+
 				printf("Filename(max size 10): ");
-				char filename[11];
-				scanf("%10s", filename);
+				fflush(stdout);
+
+				// File to save into
+				char writefile[11];
+				scanf("%10s", writefile);
 				remove_newlines();
-				if (access(filename, F_OK) != -1) {
+
+				// Check if a file with that name exists
+				if (access(writefile, F_OK) != -1) {
 					printf("This file exists, do you want to override it?(Y/N)");
 					char OK;
 					scanf("%c", &OK);
-					if (OK == 'Y') {
-						save_schedule(filename, schedule, schedule_index);
+					if (OK == 'Y' || OK == 'y') {
+						save_schedule(writefile, schedule, schedule_index);
 					}
 					break;
 				}	
-				save_schedule(filename, schedule, schedule_index);
+
+				// Save the schedule into a file
+				save_schedule(writefile, schedule, schedule_index);
 				
 				break;
 			case 4:
-				// TODO : Add option to load a schedule from a file.
-				break;
-			case 5:
-				// Prints schedule in a pretty table.
-				print_schedule(schedule, schedule_index);
-				break;
-			case 6: 
-				running = 0;
-				break;
-			default:
-			       break;	
+				// This case loads a schedule from a file
 				
-		}
-	}
-	
+
+				printf("File to read from(max size is 10): ");
+				fflush(stdout);
+
+				// File to read
+				char readfile[10 + 1];
+				scanf("%10s", readfile);
+				remove_newlines();
+
+				// Check if the file doesn't exist
+				if (access(readfile, F_OK) == -1) printf("This file doesnt exist...");
+				
+				// Clean the current schedule incase there is one.
+				printf("Cleaning schedule...\n");
+				clean_schedule(schedule, schedule_index);	
+				printf("Finished cleaning schedule\n");
+
+				load_schedule(readfile, schedule, schedule_index);
+
+			break;
+		case 5:
+			// Prints schedule in a pretty table.
+			print_schedule(schedule, schedule_index);
+			break;
+		case 6: 
+			running = 0;
+			break
+		} // End of switch
+	} // End of while
 	return 0;
 }
